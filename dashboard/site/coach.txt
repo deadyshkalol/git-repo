@@ -86,7 +86,7 @@ for i in range(28):
 workouts = []
 for a in sorted(A, key=lambda a: a.get("start_date_local") or ""):
     t = a.get("type")
-    if t not in RIDE | RUN:
+    if t not in RIDE | RUN or (a.get("moving_time") or 0) < 300:
         continue
     km = (a.get("distance") or 0) / 1000
     mins = (a.get("moving_time") or 0) / 60
@@ -135,7 +135,7 @@ unreliable = sh is not None and (sh < 3.5 or sh > 10)
 st_y = days[-2]["steps"] if len(days) > 1 else None
 if st_y and st_y > 20000:
     sig.append(f"шаги вчера {st_y}")
-ramp = (W[-1].get("rampRate") if W else None)
+ramp = f(W[-1].get("rampRate")) if W else None
 if ramp is not None and ramp > 5:
     sig.append(f"ramp {ramp:+.1f}")
 # HRV как в командах: 7-дневное среднее против 28-дневной базы и коридора SWC (0,5 SD)
@@ -182,7 +182,7 @@ for place, lat, lon in (("Яфо", 32.05, 34.75), ("Модиин", 31.89, 35.01)
         else:
             wx.append("Модиин: " + "; ".join(r.split(" ", 1)[0] + " " + r.split(" ", 1)[1] for r in rows))
     except Exception as e:
-        wx.append(f"{place}: погода недоступна ({str(e)[:60]})")
+        wx.append(f"{place}: НЕТ ПОГОДЫ")
 
 json.dump({"sample": False, "updated": now.isoformat(timespec="seconds"),
            "readiness": {"color": color, "headline": "", "why": ""},
