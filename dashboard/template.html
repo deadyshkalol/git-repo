@@ -75,7 +75,7 @@ footer{color:var(--muted);font-size:.75rem}
 
   <section class="card" id="c-sleep"><h2>Сон</h2><p class="sub">Столбики = часы, цвет = оценка сна (зелёный 75+, жёлтый 60–74, красный ниже 60)</p><div class="chart" data-chart="sleep"></div></section>
 
-  <section class="card" id="c-apple"><h2>Apple Health ночью</h2><p class="sub">Пунктир = норма за 28 дней</p>
+  <section class="card" id="c-apple"><h2>Ночные метрики часов</h2><p class="sub">Пунктир = норма за 28 дней</p>
     <div class="grid2">
       <div class="mini"><h3>Дыхание, вд/мин</h3><div class="chart" data-chart="resp"></div></div>
       <div class="mini"><h3>SpO2, %</h3><div class="chart" data-chart="spo2"></div></div>
@@ -83,7 +83,7 @@ footer{color:var(--muted);font-size:.75rem}
     </div>
   </section>
 
-  <section class="card" id="c-prog"><h2>Прогресс</h2><p class="sub">Кардиофитнес Apple (VO2max) и вес</p>
+  <section class="card" id="c-prog"><h2>Прогресс</h2><p class="sub">VO2max (Apple Watch или Garmin) и вес</p>
     <div class="grid2" style="grid-template-columns:repeat(2,minmax(0,1fr))">
       <div class="mini"><h3>VO2max, мл/кг/мин</h3><div class="chart" data-chart="vo2"></div></div>
       <div class="mini"><h3>Вес, кг</h3><div class="chart" data-chart="weight"></div></div>
@@ -92,7 +92,7 @@ footer{color:var(--muted);font-size:.75rem}
 
   <section class="card" id="c-steps"><h2>Шаги</h2><p class="sub">Больше 20 000 = дополнительная нагрузка</p><div class="chart" data-chart="steps"></div></section>
 
-  <footer>Данные: Intervals.icu (часы и Apple Health через синхронизацию). Страница обновляется утренним отчётом. Это спортивные рекомендации, не медицинская консультация.</footer>
+  <footer>Данные: Intervals.icu (Garmin Connect и Apple Health через синхронизацию). Страница обновляется утренним отчётом. Это спортивные рекомендации, не медицинская консультация.</footer>
 </div>
 
 <script type="application/json" id="health-data">__DATA__</script>
@@ -194,11 +194,11 @@ const charts={
   hr:{series:[{key:'restingHR',label:'Пульс покоя',color:'--heart'},{key:'avgSleepingHR',label:'Пульс во сне',color:'--sleep'}],refs:[{y:mRHR},{y:mRHR&&mRHR+4,color:'--warn'}],aria:'Пульс покоя и во сне'},
   sleep:{series:[{key:'sleepHours',label:'Сон, ч',kind:'bar',digits:1,colorFn:r=>r.sleepScore==null?'--slate':r.sleepScore<60?'--bad':r.sleepScore<75?'--warn':'--ok'}],refs:[{y:7}],zero:true,endLabel:false,
     tipRows:r=>[['Сон, ч',r.sleepHours,1],['Оценка',r.sleepScore]],aria:'Сон по ночам'},
-  resp:{h:110,series:[{key:'respiration',label:'Дыхание',color:'--sleep',digits:1}],refs:[{y:mResp}],tickDigits:1,emptyText:'Нет данных из Apple Health'},
-  spo2:{h:110,series:[{key:'spO2',label:'SpO2, %',color:'--heart'}],refs:[{y:94,color:'--warn'}],emptyText:'Нет данных из Apple Health'},
-  temp:{h:110,series:[{key:'wristTemp',label:'Отклонение, °C',color:'--amber',digits:2}],refs:[{y:0},{y:.5,color:'--warn'}],tickDigits:1,emptyText:'Нет данных из Apple Health'},
-  vo2:{h:110,series:[{key:'vo2max',label:'VO2max',color:'--teal',digits:1}],tickDigits:1,emptyText:'Нет данных из Apple Health'},
-  weight:{h:110,series:[{key:'weight',label:'Вес, кг',color:'--slate',digits:1}],tickDigits:1,emptyText:'Нет данных из Apple Health'},
+  resp:{h:110,series:[{key:'respiration',label:'Дыхание',color:'--sleep',digits:1}],refs:[{y:mResp}],tickDigits:1,emptyText:'Нет данных с часов'},
+  spo2:{h:110,series:[{key:'spO2',label:'SpO2, %',color:'--heart'}],refs:[{y:94,color:'--warn'}],emptyText:'Нет данных с часов'},
+  temp:{h:110,series:[{key:'wristTemp',label:'Отклонение, °C',color:'--amber',digits:2}],refs:[{y:0},{y:.5,color:'--warn'}],tickDigits:1,emptyText:'Нет данных с часов'},
+  vo2:{h:110,series:[{key:'vo2max',label:'VO2max',color:'--teal',digits:1}],tickDigits:1,emptyText:'Нет данных с часов'},
+  weight:{h:110,series:[{key:'weight',label:'Вес, кг',color:'--slate',digits:1}],tickDigits:1,emptyText:'Нет данных с часов'},
   steps:{series:[{key:'steps',label:'Шаги',kind:'bar',colorFn:r=>r.steps>20000?'--warn':'--teal'}],refs:[{y:20000,color:'--warn'}],zero:true,endLabel:false,aria:'Шаги по дням'}
 };
 // Sparse series (weight, vo2) — connect only measured days
