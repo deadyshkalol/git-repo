@@ -41,6 +41,22 @@ if not W and not A:
 RIDE = {"Ride", "VirtualRide", "GravelRide", "MountainBikeRide", "EBikeRide"}
 RUN = {"Run", "TrailRun", "VirtualRun", "TreadmillRun"}
 wb = {r["id"]: r for r in W}
+present = sorted({k for r in W for k, v in r.items() if v not in (None, 0, "", [])} - {"id", "updated", "sportInfo"})
+HR_KEYS = ["avgSleepingHR", "sleepingHR", "avgSleepHR", "sleepHR", "restingHRSleep"]
+hr_key = next((k for k in HR_KEYS if k in present), None)
+STAGE = {}
+for k in present:
+    lk = k.lower()
+    for st_name, words in (("deep", ["deep"]), ("light", ["light"]), ("rem", ["rem"]), ("awake", ["awake", "wake"])):
+        if st_name not in STAGE and any(w in lk for w in words) and ("sleep" in lk or lk.startswith(words[0])):
+            STAGE[st_name] = k
+
+
+def hours(v):
+    if v is None:
+        return None
+    v = float(v)
+    return round(v / 3600 if v > 100 else v / 60 if v > 16 else v, 2)
 
 
 def f(v, d=1):
@@ -58,7 +74,8 @@ for i in range(28):
     days.append({
         "date": d, "hrv": r.get("hrv"), "hrvSDNN": r.get("hrvSDNN"), "restingHR": r.get("restingHR"),
         "sleepHours": f((r.get("sleepSecs") or 0) / 3600) if r.get("sleepSecs") else None,
-        "sleepScore": r.get("sleepScore"), "steps": r.get("steps"), "weight": r.get("weight"),
+        "sleepScore": r.get("sleepScore"), "avgSleepingHR": r.get(hr_key) if hr_key else None,
+        **{"st" + n.capitalize(): hours(r.get(k)) for n, k in STAGE.items()}, "steps": r.get("steps"), "weight": r.get("weight"),
         "vo2max": r.get("vo2max"), "ctl": f(ctl), "atl": f(atl),
         "tsb": f(ctl - atl) if ctl is not None and atl is not None else None,
         "rideMin": f(sum((a.get("moving_time") or 0) for a in ride) / 60),
@@ -81,7 +98,11 @@ for a in sorted(A, key=lambda a: a.get("start_date_local") or ""):
         "date": (a.get("start_date_local") or "")[:10], "type": "run" if t in RUN else "ride",
         "min": f(mins, 0), "km": f(km), "avgHR": a.get("average_heartrate"),
         "avgW": a.get("icu_average_watts") or a.get("average_watts"), "pace": pace,
-        "decoupling": f(a.get("decoupling")),
+        "decoupling": f(a.get("decoupling")), "load": f(a.get("icu_training_load"), 0),
+        "IF": f((a.get("icu_intensity") or 0) / 100, 2) if a.get("icu_intensity") else None,
+        "z12": (round(100 * sum((a.get("icu_hr_zone_times") or [])[:2]) / max(1, sum(a.get("icu_hr_zone_times") or [])))
+                if a.get("icu_hr_zone_times") else None),
+        "rpe": a.get("icu_rpe") or a.get("perceived_exertion"),
     })
 
 
@@ -117,6 +138,15 @@ if st_y and st_y > 20000:
 ramp = (W[-1].get("rampRate") if W else None)
 if ramp is not None and ramp > 5:
     sig.append(f"ramp {ramp:+.1f}")
+# HRV как в командах: 7-дневное среднее против 28-дневной базы и коридора SWC (0,5 SD)
+hv = col(hk)
+h7 = mean([x[hk] for x in days[-7:] if x[hk] is not None])
+swc = 0.5 * st.pstdev(hv) if len(hv) > 3 else None
+hrv_band = None
+if hn and h7 and swc:
+    hrv_band = "в коридоре" if abs(h7 - hn) <= swc else ("ниже коридора" if h7 < hn else "выше коридора")
+    if hrv_band == "ниже коридора" and not any("HRV" in x for x in sig + strong):
+        sig.append(f"HRV 7дн {h7:.0f} ниже коридора {hn - swc:.0f}-{hn + swc:.0f}")
 color = "red" if strong or len(sig) >= 3 else "yellow" if sig else "green"
 health = []
 if rn and rl and rl - rn >= 6:
@@ -142,11 +172,15 @@ wx = []
 for place, lat, lon in (("Яфо", 32.05, 34.75), ("Модиин", 31.89, 35.01)):
     try:
         u = (f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&timezone=Asia%2FJerusalem&forecast_days=6"
-             "&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,wind_speed_10m_max,sunset")
+             "&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max,sunset")
         d = get(u, auth=False, name="weather_" + place)["daily"]
-        for i, day in enumerate(d["time"]):
-            wx.append(f"{place} {day}: {d['temperature_2m_min'][i]:.0f}..{d['temperature_2m_max'][i]:.0f}°C, дождь {d['precipitation_probability_max'][i]}% "
-                      f"{d['precipitation_sum'][i]}мм, ветер до {d['wind_speed_10m_max'][i]:.0f} км/ч, закат {d['sunset'][i][11:]}")
+        rows = [f"{dt.date.fromisoformat(t).strftime('%d.%m')} {d['temperature_2m_min'][i]:.0f}-{d['temperature_2m_max'][i]:.0f}° "
+                f"дождь{d['precipitation_probability_max'][i]}% ветер{d['wind_speed_10m_max'][i]:.0f}" for i, t in enumerate(d["time"])]
+        if place == "Яфо":
+            wx.append(f"закат {d['sunset'][0][11:]}")
+            wx += rows
+        else:
+            wx.append("Модиин: " + "; ".join(r.split(" ", 1)[0] + " " + r.split(" ", 1)[1] for r in rows))
     except Exception as e:
         wx.append(f"{place}: погода недоступна ({str(e)[:60]})")
 
@@ -159,12 +193,30 @@ print(f"СЕГОДНЯ {today} ({['пн','вт','ср','чт','пт','сб','в�
 print(f"ГОТОВНОСТЬ {color}; сигналы: {'; '.join(strong + sig) or 'нет'}" + ("; сон ненадёжен" if unreliable else ""))
 print(f"HRV({hk}) посл {L[hk]} 3дн {h3 and round(h3)} норма {hn and round(hn)} | пульс покоя {rl} норма {rn and round(rn, 1)}")
 print(f"сон {sh} ч, оценка {L['sleepScore']} (вчера {days[-2]['sleepScore']}) | шаги вчера {st_y}")
-print(f"CTL {L['ctl']} ATL {L['atl']} TSB {L['tsb']} ramp {ramp} | VO2max {col('vo2max')[-1:] or '-'} вес {col('weight')[-1:] or '-'}")
-print("НЕДЕЛИ (пн: вело ч / бег ч / бег км):", "; ".join(f"{k[5:]}: {v[0]:.1f}/{v[1]:.1f}/{v[2]:.1f}" for k, v in wk.items()))
-print("ТРЕНИРОВКИ:", "; ".join(f"{w['date'][5:]} {w['type']} {w['min']:.0f}мин {w['km']}км пульс {w['avgHR']} "
-                               f"{(w['pace'] or '') if w['type'] == 'run' else (str(w['avgW']) + 'Вт' if w['avgW'] else '')} дрейф {w['decoupling']}" for w in workouts[-8:]) or "нет")
+if STAGE:
+    print("ФАЗЫ СНА (ч):", ", ".join(f"{n} {L.get('st' + n.capitalize())}" for n in STAGE))
+if hr_key:
+    sn = mean(col("avgSleepingHR"))
+    print(f"ПУЛЬС НОЧЬЮ {L['avgSleepingHR']} норма {sn and round(sn, 1)}")
+    if L["avgSleepingHR"] and sn and L["avgSleepingHR"] - sn >= 4:
+        print("  сигнал: пульс ночью +4 к норме")
+if hrv_band:
+    print(f"HRV 7дн {h7:.0f}: {hrv_band} ({hn - swc:.0f}-{hn + swc:.0f})")
+subj = {k: L_w.get(k) for k in ("soreness", "fatigue", "stress", "mood", "motivation", "injury") if (L_w := wb.get(today.isoformat(), {})).get(k)}
+if subj:
+    print("САМОЧУВСТВИЕ (1 лучше, 4 хуже):", ", ".join(f"{k} {v}" for k, v in subj.items()))
+acwr = round(L["atl"] / L["ctl"], 2) if L["atl"] and L["ctl"] else None
+print(f"CTL {L['ctl']} ATL {L['atl']} TSB {L['tsb']} ramp {ramp} ACWR {acwr} | VO2max {col('vo2max')[-1:] or '-'} вес {col('weight')[-1:] or '-'}")
+print("НЕДЕЛИ вело ч/бег ч/бег км:", "; ".join(f"{k[5:]} {v[0]:.1f}/{v[1]:.1f}/{v[2]:.0f}" for k, v in wk.items()))
+yd = (today - dt.timedelta(days=1)).isoformat()
+for w in [w for w in workouts if w["date"] in (yd, today.isoformat())]:
+    print(f"СЕССИЯ {w['date'][5:]} {w['type']}: {w['min']:.0f} мин, {w['km']} км, пульс {w['avgHR']}, "
+          f"{(w['pace'] or '') if w['type'] == 'run' else (str(w['avgW']) + ' Вт' if w['avgW'] else '')}, TSS {w['load']}, IF {w['IF']}, "
+          f"Z1-2 {w['z12']}%, дрейф {w['decoupling']}, RPE {w['rpe']}")
+print("ТРЕН (посл 5):", "; ".join(f"{w['date'][5:]} {'бег' if w['type'] == 'run' else 'вело'} {w['min']:.0f}м {w['km']}км п{w['avgHR'] and round(w['avgHR'])}"
+                                  + (f" {w['pace']}" if w['type'] == 'run' and w['pace'] else f" {round(w['avgW'])}Вт" if w['avgW'] else "")
+                                  + (f" др{w['decoupling']}" if w['decoupling'] is not None else "") for w in workouts[-5:]) or "нет")
 print("ЗОНЫ:", "; ".join(zones) or "нет")
 if health:
     print("ЗДОРОВЬЕ:", "; ".join(health))
-print("ПОГОДА:")
-print("\n".join(wx))
+print("ПОГОДА Яфо:", " | ".join(wx))

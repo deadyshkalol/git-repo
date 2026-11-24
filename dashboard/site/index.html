@@ -16,13 +16,13 @@
 
   <section class="card" id="c-vol"><h2>Объём по неделям</h2><p class="sub">Часы велосипеда и бега; цель рост не более 10% в неделю</p><div class="legend"><span><i style="background:var(--teal)"></i>Велосипед</span><span><i style="background:var(--amber)"></i>Бег</span></div><div class="chart" data-chart="volume"></div></section>
 
-  <section class="card" id="c-work"><h2>Тренировки</h2><p class="sub">Последние 28 дней; дрейф пульса до 5% на длинной = хорошая аэробная база</p><div class="tbl"><table><thead><tr><th>Дата</th><th>Вид</th><th>Время</th><th>Км</th><th>Пульс</th><th>Мощн. / темп</th><th>Дрейф</th></tr></thead><tbody id="work-body"></tbody></table></div></section>
+  <section class="card" id="c-work"><h2>Тренировки</h2><p class="sub">Последние 28 дней; дрейф пульса до 5% на длинной = хорошая аэробная база</p><div class="tbl"><table><thead><tr><th>Дата</th><th>Вид</th><th>Время</th><th>Км</th><th>Пульс</th><th>Мощн. / темп</th><th>TSS</th><th>Дрейф</th></tr></thead><tbody id="work-body"></tbody></table></div></section>
 
   <section class="card" id="c-hrv"><h2>HRV</h2><p class="sub">Пунктир = норма за 28 дней; ниже 85% = сигнал, ниже 75% = сильный</p><div class="legend"><span><i style="background:var(--teal)"></i><span id="hrvlabel">HRV, мс</span></span><span><i class="dash"></i>норма</span></div><div class="chart" data-chart="hrv"></div></section>
 
-  <section class="card" id="c-hr"><h2 id="hr-title">Пульс покоя и пульс во сне</h2><p class="sub">Рост на 4+ уд/мин к норме = сигнал</p><div class="legend"><span><i style="background:var(--heart)"></i>покоя</span><span id="lg-shr"><i style="background:var(--sleep)"></i>во сне</span><span><i class="dash"></i>норма</span></div><div class="chart" data-chart="hr"></div></section>
+  <section class="card" id="c-hr"><h2 id="hr-title">Пульс покоя и пульс ночью</h2><p class="sub">Пульс ночью = средний пульс во сне; рост на 4+ уд/мин к норме = сигнал</p><div class="legend"><span><i style="background:var(--heart)"></i>покоя</span><span id="lg-shr"><i style="background:var(--sleep)"></i>ночью</span><span><i class="dash"></i>норма</span></div><div class="chart" data-chart="hr"></div></section>
 
-  <section class="card" id="c-sleep"><h2>Сон</h2><p class="sub">Столбики = часы, цвет = оценка сна (зелёный 75+, жёлтый 60–74, красный ниже 60)</p><div class="chart" data-chart="sleep"></div></section>
+  <section class="card" id="c-sleep"><h2>Сон</h2><p class="sub" id="sleep-sub">Столбики = часы, цвет = оценка сна (зелёный 75+, жёлтый 60–74, красный ниже 60)</p><div class="legend" id="sleep-legend" hidden><span><i style="background:var(--sleep)"></i>глубокий</span><span><i style="background:var(--teal)"></i>лёгкий</span><span><i style="background:var(--amber)"></i>REM</span><span><i style="background:var(--slate)"></i>пробуждения</span></div><div class="chart" data-chart="sleep"></div></section>
 
 
   <section class="card" id="c-prog"><h2>Прогресс</h2><p class="sub">VO2max и вес (для мощности на кг)</p>

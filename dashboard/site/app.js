@@ -84,7 +84,9 @@ function draw(host,o){
 function weeks(){const map=new Map();days.forEach(r=>{const d=new Date(r.date+'T00:00:00Z');const wd=(d.getUTCDay()+6)%7;const mon=new Date(d.getTime()-wd*864e5).toISOString().slice(0,10);
   if(!map.has(mon))map.set(mon,{date:mon,ride:0,run:0,km:0,days:0});const w=map.get(mon);w.ride+=(r.rideMin||0)/60;w.run+=(r.runMin||0)/60;w.km+=r.runKm||0;w.days++});
   return [...map.values()].map(w=>({...w,ride:+w.ride.toFixed(2),run:+w.run.toFixed(2),total:+(w.ride+w.run).toFixed(2)}))}
-const W=weeks();
+days.forEach(r=>{r.b1=r.stDeep||0;r.b2=r.b1+(r.stLight||0);r.b3=r.b2+(r.stRem||0)});
+  const hasStages=days.some(r=>r.stDeep!=null||r.stRem!=null||r.stLight!=null);
+  const W=weeks();
 
 const mHRV=mean(vals(hrvKey)),mRHR=mean(vals('restingHR')),mSHR=mean(vals('avgSleepingHR'));
 const charts={
@@ -93,26 +95,33 @@ const charts={
     xLabel:(w,full)=>(full?'Неделя с ':'')+fd(w.date),tipRows:w=>[['Велосипед, ч',w.ride,1],['Бег, ч',w.run,1],['Бег, км',w.km,1],['Всего, ч',w.total,1]],aria:'Часы тренировок по неделям'},
   hrv:{series:[{key:hrvKey,label:'HRV, мс'}].map(s=>({...s,color:'--teal'})),refs:[{y:mHRV},{y:mHRV&&mHRV*.85,color:'--warn'},{y:mHRV&&mHRV*.75,color:'--bad'}],aria:'HRV за 28 дней'},
   hr:{series:[{key:'restingHR',label:'Пульс покоя',color:'--heart'},{key:'avgSleepingHR',label:'Пульс во сне',color:'--sleep'}],refs:[{y:mRHR},{y:mRHR&&mRHR+4,color:'--warn'}],aria:'Пульс покоя и во сне'},
-  sleep:{series:[{key:'sleepHours',label:'Сон, ч',kind:'bar',digits:1,colorFn:r=>r.sleepScore==null?'--slate':r.sleepScore<60?'--bad':r.sleepScore<75?'--warn':'--ok'}],refs:[{y:7}],zero:true,endLabel:false,
+  sleep:(days.some(r=>r.stDeep!=null||r.stRem!=null||r.stLight!=null))?{series:[
+      {key:'stDeep',label:'Глубокий, ч',kind:'bar',color:'--sleep',digits:1},
+      {key:'stLight',label:'Лёгкий, ч',kind:'bar',color:'--teal',stackOn:'b1',digits:1},
+      {key:'stRem',label:'REM, ч',kind:'bar',color:'--amber',stackOn:'b2',digits:1},
+      {key:'stAwake',label:'Пробуждения, ч',kind:'bar',color:'--slate',stackOn:'b3',digits:1}],
+    refs:[{y:7}],zero:true,endLabel:false,
+    tipRows:r=>[['Глубокий, ч',r.stDeep,1],['Лёгкий, ч',r.stLight,1],['REM, ч',r.stRem,1],['Пробуждения, ч',r.stAwake,1],['Всего сна, ч',r.sleepHours,1],['Оценка',r.sleepScore]],aria:'Фазы сна по ночам'}:{series:[{key:'sleepHours',label:'Сон, ч',kind:'bar',digits:1,colorFn:r=>r.sleepScore==null?'--slate':r.sleepScore<60?'--bad':r.sleepScore<75?'--warn':'--ok'}],refs:[{y:7}],zero:true,endLabel:false,
     tipRows:r=>[['Сон, ч',r.sleepHours,1],['Оценка',r.sleepScore]],aria:'Сон по ночам'},
   vo2:{h:110,series:[{key:'vo2max',label:'VO2max',color:'--teal',digits:1}],tickDigits:1,emptyText:'Нет данных с часов'},
   weight:{h:110,series:[{key:'weight',label:'Вес, кг',color:'--slate',digits:1}],tickDigits:1,emptyText:'Нет данных с часов'},
 };
 // Sparse series (weight, vo2) — connect only measured days
-function render(){document.querySelectorAll('[data-chart]').forEach(h=>{const o=charts[h.dataset.chart];if(!o)return;
+function render(){
+  {const sub=document.getElementById('sleep-sub'),lg=document.getElementById('sleep-legend');if(sub&&lg){lg.hidden=!hasStages;sub.textContent=hasStages?'Фазы сна по ночам, пунктир = 7 часов':'Столбики = часы, цвет = оценка сна (зелёный 75+, жёлтый 60–74, красный ниже 60)'}}document.querySelectorAll('[data-chart]').forEach(h=>{const o=charts[h.dataset.chart];if(!o)return;
   if(['vo2','weight'].includes(h.dataset.chart)){const k=o.series[0].key;o.rows=days.filter(r=>r[k]!=null)}
   const ok=draw(h,o)!==false;const box=h.closest('.mini')||h.closest('section.card');box.hidden=!ok});
   document.querySelectorAll('section.card').forEach(c=>{const m=c.querySelectorAll('.mini');if(m.length)c.hidden=[...m].every(x=>x.hidden)});
   const shr=vals('avgSleepingHR').length>0;const lg=document.getElementById('lg-shr');if(lg)lg.hidden=!shr;
-  const ht=document.getElementById('hr-title');if(ht)ht.textContent=shr?'Пульс покоя и пульс во сне':'Пульс покоя'}
+  const ht=document.getElementById('hr-title');if(ht)ht.textContent=shr?'Пульс покоя и пульс ночью':'Пульс покоя'}
 // Workouts table
 (function(){const W=(D.workouts||[]).slice().sort((a,b)=>a.date<b.date?1:-1);const body=document.getElementById('work-body');const sec=document.getElementById('c-work');
   if(!W.length){sec.hidden=true;return}
   W.forEach(w=>{const tr=document.createElement('tr');const run=w.type==='run';
     const cells=[fd(w.date),null,w.min==null?'—':Math.round(w.min)+' мин',w.km==null?'—':num(w.km,1),w.avgHR==null?'—':Math.round(w.avgHR),
-      run?(w.pace||'—'):(w.avgW==null?'—':Math.round(w.avgW)+' Вт'),w.decoupling==null?'—':num(w.decoupling,1)+'%'];
+      run?(w.pace||'—'):(w.avgW==null?'—':Math.round(w.avgW)+' Вт'),w.load==null?'—':Math.round(w.load),w.decoupling==null?'—':num(w.decoupling,1)+'%'];
     cells.forEach((c,i)=>{const td=document.createElement('td');if(i===1){const t=document.createElement('span');t.className='tag '+(run?'run':'ride');t.textContent=run?'Бег':'Вело';td.append(t)}else{td.textContent=c;if(i>1)td.className='n'}
-      if(i===6&&w.decoupling!=null)td.classList.add(w.decoupling>10?'badc':w.decoupling>5?'warnc':'good');tr.append(td)});body.append(tr)})})();
+      if(i===7&&w.decoupling!=null)td.classList.add(w.decoupling>10?'badc':w.decoupling>5?'warnc':'good');tr.append(td)});body.append(tr)})})();
 render();
 let raf;const ro=new ResizeObserver(()=>{cancelAnimationFrame(raf);raf=requestAnimationFrame(render)});ro.observe(document.querySelector('.wrap'));
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change',render);
