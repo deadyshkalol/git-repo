@@ -1,0 +1,170 @@
+# coach.py: утренний сбор данных для отчёта тренера.
+# Запуск: python3 coach.py <ключ API Intervals.icu> [папка с офлайн-JSON для проверки]
+# Пишет /tmp/data.json для страницы с графиками и печатает короткую сводку.
+import json, sys, os, statistics as st, subprocess, datetime as dt
+from zoneinfo import ZoneInfo
+
+KEY = sys.argv[1]
+OFF = sys.argv[2] if len(sys.argv) > 2 else None
+ATH = "i663714"
+TZ = ZoneInfo("Asia/Jerusalem")
+now = dt.datetime.now(TZ)
+today = now.date()
+old = today - dt.timedelta(days=27)
+
+
+def get(url, auth=True, name=None):
+    if OFF:
+        p = os.path.join(OFF, name + ".json")
+        return json.load(open(p)) if os.path.exists(p) else None
+    cmd = ["curl", "-sS", "--fail-with-body", "--max-time", "30", url]
+    if auth:
+        cmd[1:1] = ["-u", "API_KEY:" + KEY]
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    if r.returncode:
+        raise RuntimeError((r.stderr or r.stdout).strip()[:200])
+    return json.loads(r.stdout)
+
+
+B = f"https://intervals.icu/api/v1/athlete/{ATH}"
+try:
+    W = get(f"{B}/wellness?oldest={old}&newest={today}", name="wellness") or []
+    A = get(f"{B}/activities?oldest={old}&newest={today}", name="activities") or []
+    SS = get(f"{B}/sport-settings", name="sport-settings") or []
+except Exception as e:
+    print("INTERVALS_ERROR", str(e).replace(KEY, "***"))
+    sys.exit(2)
+if not W and not A:
+    print("INTERVALS_ERROR пустой ответ")
+    sys.exit(2)
+
+RIDE = {"Ride", "VirtualRide", "GravelRide", "MountainBikeRide", "EBikeRide"}
+RUN = {"Run", "TrailRun", "VirtualRun", "TreadmillRun"}
+wb = {r["id"]: r for r in W}
+
+
+def f(v, d=1):
+    return None if v is None else round(float(v), d)
+
+
+days = []
+for i in range(28):
+    d = (old + dt.timedelta(days=i)).isoformat()
+    r = wb.get(d, {})
+    acts = [a for a in A if (a.get("start_date_local") or "")[:10] == d]
+    ride = [a for a in acts if a.get("type") in RIDE]
+    run = [a for a in acts if a.get("type") in RUN]
+    ctl, atl = r.get("ctl"), r.get("atl")
+    days.append({
+        "date": d, "hrv": r.get("hrv"), "hrvSDNN": r.get("hrvSDNN"), "restingHR": r.get("restingHR"),
+        "sleepHours": f((r.get("sleepSecs") or 0) / 3600) if r.get("sleepSecs") else None,
+        "sleepScore": r.get("sleepScore"), "steps": r.get("steps"), "weight": r.get("weight"),
+        "vo2max": r.get("vo2max"), "ctl": f(ctl), "atl": f(atl),
+        "tsb": f(ctl - atl) if ctl is not None and atl is not None else None,
+        "rideMin": f(sum((a.get("moving_time") or 0) for a in ride) / 60),
+        "runMin": f(sum((a.get("moving_time") or 0) for a in run) / 60),
+        "runKm": f(sum((a.get("distance") or 0) for a in run) / 1000),
+    })
+
+workouts = []
+for a in sorted(A, key=lambda a: a.get("start_date_local") or ""):
+    t = a.get("type")
+    if t not in RIDE | RUN:
+        continue
+    km = (a.get("distance") or 0) / 1000
+    mins = (a.get("moving_time") or 0) / 60
+    pace = None
+    if t in RUN and km > 0:
+        s = mins * 60 / km
+        pace = f"{int(s // 60)}:{int(s % 60):02d}/км"
+    workouts.append({
+        "date": (a.get("start_date_local") or "")[:10], "type": "run" if t in RUN else "ride",
+        "min": f(mins, 0), "km": f(km), "avgHR": a.get("average_heartrate"),
+        "avgW": a.get("icu_average_watts") or a.get("average_watts"), "pace": pace,
+        "decoupling": f(a.get("decoupling")),
+    })
+
+
+def col(k):
+    return [x[k] for x in days if x[k] is not None]
+
+
+def mean(v):
+    return st.mean(v) if v else None
+
+
+sig, strong = [], []
+hk = "hrv" if col("hrv") else "hrvSDNN"
+hn, h3 = mean(col(hk)), mean([x[hk] for x in days[-3:] if x[hk] is not None])
+if hn and h3:
+    p = h3 / hn
+    if p < .75:
+        strong.append(f"HRV 3дн {h3:.0f} = {p:.0%} нормы")
+    elif p < .85:
+        sig.append(f"HRV 3дн {h3:.0f} = {p:.0%} нормы")
+rn = mean(col("restingHR"))
+rl = days[-1]["restingHR"]
+if rn and rl and rl - rn >= 4:
+    sig.append(f"пульс покоя {rl} (+{rl - rn:.1f})")
+sc = [x["sleepScore"] for x in days[-2:]]
+if all(s is not None and s < 60 for s in sc):
+    sig.append(f"сон 2 ночи <60 ({sc[0]:.0f}, {sc[1]:.0f})")
+sh = days[-1]["sleepHours"]
+unreliable = sh is not None and (sh < 3.5 or sh > 10)
+st_y = days[-2]["steps"] if len(days) > 1 else None
+if st_y and st_y > 20000:
+    sig.append(f"шаги вчера {st_y}")
+ramp = (W[-1].get("rampRate") if W else None)
+if ramp is not None and ramp > 5:
+    sig.append(f"ramp {ramp:+.1f}")
+color = "red" if strong or len(sig) >= 3 else "yellow" if sig else "green"
+health = []
+if rn and rl and rl - rn >= 6:
+    health.append("пульс покоя +6 к норме")
+if hn and all(x[hk] is not None and x[hk] < .75 * hn for x in days[-3:]):
+    health.append("HRV <75% три дня подряд")
+
+wk = {}
+for x in days:
+    m = (dt.date.fromisoformat(x["date"]) - dt.timedelta(days=dt.date.fromisoformat(x["date"]).weekday())).isoformat()
+    w = wk.setdefault(m, [0, 0, 0])
+    w[0] += x["rideMin"] / 60; w[1] += x["runMin"] / 60; w[2] += x["runKm"]
+
+zones = []
+for s in SS:
+    types = set(s.get("types") or [])
+    z = s.get("hr_zones") or []
+    name = "вело" if types & RIDE else "бег" if types & RUN else None
+    if name and len(z) >= 2:
+        zones.append(f"{name}: Z2 {z[0] + 1}-{z[1]} (LTHR {s.get('lthr')}, FTP {s.get('ftp')})")
+
+wx = []
+for place, lat, lon in (("Яфо", 32.05, 34.75), ("Модиин", 31.89, 35.01)):
+    try:
+        u = (f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&timezone=Asia%2FJerusalem&forecast_days=6"
+             "&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,wind_speed_10m_max,sunset")
+        d = get(u, auth=False, name="weather_" + place)["daily"]
+        for i, day in enumerate(d["time"]):
+            wx.append(f"{place} {day}: {d['temperature_2m_min'][i]:.0f}..{d['temperature_2m_max'][i]:.0f}°C, дождь {d['precipitation_probability_max'][i]}% "
+                      f"{d['precipitation_sum'][i]}мм, ветер до {d['wind_speed_10m_max'][i]:.0f} км/ч, закат {d['sunset'][i][11:]}")
+    except Exception as e:
+        wx.append(f"{place}: погода недоступна ({str(e)[:60]})")
+
+json.dump({"sample": False, "updated": now.isoformat(timespec="seconds"),
+           "readiness": {"color": color, "headline": "", "why": ""},
+           "days": days, "workouts": workouts}, open("/tmp/data.json", "w"), ensure_ascii=False)
+
+L = days[-1]
+print(f"СЕГОДНЯ {today} ({['пн','вт','ср','чт','пт','сб','вс'][today.weekday()]})")
+print(f"ГОТОВНОСТЬ {color}; сигналы: {'; '.join(strong + sig) or 'нет'}" + ("; сон ненадёжен" if unreliable else ""))
+print(f"HRV({hk}) посл {L[hk]} 3дн {h3 and round(h3)} норма {hn and round(hn)} | пульс покоя {rl} норма {rn and round(rn, 1)}")
+print(f"сон {sh} ч, оценка {L['sleepScore']} (вчера {days[-2]['sleepScore']}) | шаги вчера {st_y}")
+print(f"CTL {L['ctl']} ATL {L['atl']} TSB {L['tsb']} ramp {ramp} | VO2max {col('vo2max')[-1:] or '-'} вес {col('weight')[-1:] or '-'}")
+print("НЕДЕЛИ (пн: вело ч / бег ч / бег км):", "; ".join(f"{k[5:]}: {v[0]:.1f}/{v[1]:.1f}/{v[2]:.1f}" for k, v in wk.items()))
+print("ТРЕНИРОВКИ:", "; ".join(f"{w['date'][5:]} {w['type']} {w['min']:.0f}мин {w['km']}км пульс {w['avgHR']} "
+                               f"{(w['pace'] or '') if w['type'] == 'run' else (str(w['avgW']) + 'Вт' if w['avgW'] else '')} дрейф {w['decoupling']}" for w in workouts[-8:]) or "нет")
+print("ЗОНЫ:", "; ".join(zones) or "нет")
+if health:
+    print("ЗДОРОВЬЕ:", "; ".join(health))
+print("ПОГОДА:")
+print("\n".join(wx))

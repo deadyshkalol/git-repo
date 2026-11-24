@@ -1,0 +1,38 @@
+<title>Форма Ивана</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="app.css">
+<div class="wrap">
+  <header>
+    <h1>Форма Ивана</h1>
+    <div class="meta" id="updated"></div>
+    <div class="sample" id="sample" hidden>Это пример данных для проверки вида. Настоящие цифры появятся после ближайшего утреннего отчёта.</div>
+    <div class="ready"><span class="pill" id="pill"></span><div><b id="headline"></b><span id="why"></span></div></div>
+    <div class="tiles" id="tiles"></div>
+  </header>
+
+  <section class="card" id="c-form"><h2>Форма: CTL, ATL и TSB</h2><p class="sub">CTL = долгая нагрузка (фитнес), ATL = недельная (усталость), столбики TSB = свежесть</p><div class="legend"><span><i style="background:var(--teal)"></i>CTL</span><span><i style="background:var(--heart)"></i>ATL</span><span><i style="background:var(--slate)"></i>TSB</span></div><div class="chart" data-chart="form"></div></section>
+
+  <section class="card" id="c-vol"><h2>Объём по неделям</h2><p class="sub">Часы велосипеда и бега; цель рост не более 10% в неделю</p><div class="legend"><span><i style="background:var(--teal)"></i>Велосипед</span><span><i style="background:var(--amber)"></i>Бег</span></div><div class="chart" data-chart="volume"></div></section>
+
+  <section class="card" id="c-work"><h2>Тренировки</h2><p class="sub">Последние 28 дней; дрейф пульса до 5% на длинной = хорошая аэробная база</p><div class="tbl"><table><thead><tr><th>Дата</th><th>Вид</th><th>Время</th><th>Км</th><th>Пульс</th><th>Мощн. / темп</th><th>Дрейф</th></tr></thead><tbody id="work-body"></tbody></table></div></section>
+
+  <section class="card" id="c-hrv"><h2>HRV</h2><p class="sub">Пунктир = норма за 28 дней; ниже 85% = сигнал, ниже 75% = сильный</p><div class="legend"><span><i style="background:var(--teal)"></i><span id="hrvlabel">HRV, мс</span></span><span><i class="dash"></i>норма</span></div><div class="chart" data-chart="hrv"></div></section>
+
+  <section class="card" id="c-hr"><h2 id="hr-title">Пульс покоя и пульс во сне</h2><p class="sub">Рост на 4+ уд/мин к норме = сигнал</p><div class="legend"><span><i style="background:var(--heart)"></i>покоя</span><span id="lg-shr"><i style="background:var(--sleep)"></i>во сне</span><span><i class="dash"></i>норма</span></div><div class="chart" data-chart="hr"></div></section>
+
+  <section class="card" id="c-sleep"><h2>Сон</h2><p class="sub">Столбики = часы, цвет = оценка сна (зелёный 75+, жёлтый 60–74, красный ниже 60)</p><div class="chart" data-chart="sleep"></div></section>
+
+
+  <section class="card" id="c-prog"><h2>Прогресс</h2><p class="sub">VO2max и вес (для мощности на кг)</p>
+    <div class="grid2" style="grid-template-columns:repeat(2,minmax(0,1fr))">
+      <div class="mini"><h3>VO2max, мл/кг/мин</h3><div class="chart" data-chart="vo2"></div></div>
+      <div class="mini"><h3>Вес, кг</h3><div class="chart" data-chart="weight"></div></div>
+    </div>
+  </section>
+
+
+  <footer>Данные: Intervals.icu (Garmin Forerunner через Garmin Connect). Страница обновляется утренним отчётом. Это спортивные рекомендации, не медицинская консультация.</footer>
+</div>
+<script src="app.js"></script>
